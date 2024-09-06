@@ -1,17 +1,43 @@
 class ExternalApp extends App {
     manifest: AppManifest;
     source: string;
+    icon = "/assets/icons/generic.png";
 
     constructor(manifest: AppManifest, source: string) {
         super();
         this.manifest = manifest;
         this.name = manifest.name;
-        this.icon = source + "/" + manifest.icon;
+        if (manifest.icon) {
+            this.icon = source + "/" + manifest.icon;
+        }
         this.source = source;
         this.package = manifest.package;
         this.hidden = manifest.hidden || false;
     }
-    async open(): Promise<WMWindow | undefined> {
+
+    static serializeArgs(args: string[]): string {
+        const encoder = new TextEncoder();
+        const encodedValues = args.map((value) => {
+            const bytes = encoder.encode(value);
+            const binString = String.fromCodePoint(...bytes);
+            return btoa(binString);
+        });
+        return encodeURIComponent(encodedValues.join(","));
+    }
+
+    static deserializeArgs(args: string): string[] {
+        const decoder = new TextDecoder("utf-8");
+        return decodeURIComponent(args)
+            .split(",")
+            .map((value) => {
+                const binString = atob(value);
+                return decoder.decode(
+                    Uint8Array.from(binString, (c) => c.charCodeAt(0)),
+                );
+            });
+    }
+
+    async open(args: string[] = []): Promise<WMWindow | undefined> {
         //  TODO: have a "allowmultiinstance" option in manifest? it might confuse users, some windows open a second, some focus
         // if (this.windowinstance) return;
         if (this.manifest.type === "auto") {
@@ -26,11 +52,28 @@ class ExternalApp extends App {
                     `border: none; margin: 0; padding: 0; background-color: ${bg};`,
             );
             console.log(this.source);
-            iframe.setAttribute("src", `${this.source}/${this.manifest.index}`);
+            iframe.setAttribute(
+                "src",
+                `${this.source}/${this.manifest.index}${this.manifest.index?.includes("?") ? "&" : "?"}args=${ExternalApp.serializeArgs(args)}`,
+            );
             win.content.appendChild(iframe);
 
-            (iframe.contentWindow as any).anura = anura;
-            (iframe.contentWindow as any).AliceWM = AliceWM;
+            Object.assign(iframe.contentWindow as any, {
+                anura,
+                AliceWM,
+                ExternalApp,
+                LocalFS,
+                instance: this,
+                instanceWindow: win,
+            });
+
+            const matter = document.createElement("link");
+            matter.setAttribute("rel", "stylesheet");
+            matter.setAttribute("href", "/assets/matter.css");
+
+            iframe.contentWindow!.addEventListener("load", () => {
+                iframe.contentDocument!.head.appendChild(matter);
+            });
 
             return win;
         } else {

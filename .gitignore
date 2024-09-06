@@ -15,6 +15,7 @@ build/
 dist/
 bios/
 apps/games.app
+apps/libfileview.lib/icons/
 libv86.js
 v86.wasm
 public/dist.js
@@ -26,4 +27,5 @@ package-lock.json
 .direnv
 result
 public/config.json
+static/
 
